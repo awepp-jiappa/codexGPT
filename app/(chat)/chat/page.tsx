@@ -11,10 +11,10 @@ export default async function ChatPage() {
     include: { messages: { orderBy: { createdAt: 'asc' } } }
   });
 
-  const simplified = conversations.map((c) => ({
+  const simplified = conversations.map((c: (typeof conversations)[number]) => ({
     id: c.id,
     title: c.title,
-    messages: c.messages.map((m) => ({ id: m.id, role: m.role as 'user' | 'assistant' | 'system', content: m.content }))
+    messages: c.messages.map((m: (typeof c.messages)[number]) => ({ id: m.id, role: m.role as 'user' | 'assistant' | 'system', content: m.content }))
   }));
 
   return <ChatShell initialConversations={simplified} username={user.username} isAdmin={user.isAdmin} csrfToken={csrfToken} />;

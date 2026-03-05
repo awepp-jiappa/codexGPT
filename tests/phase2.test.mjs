@@ -23,6 +23,13 @@ function checkRateLimitFactory() {
   };
 }
 
+function makeConversationTitle(firstMessage) {
+  const words = firstMessage.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  if (words.length === 0) return 'New Chat';
+  const desiredLength = words.length >= 10 ? 10 : words.length >= 6 ? words.length : Math.min(words.length, 6);
+  return words.slice(0, desiredLength).join(' ').slice(0, 120);
+}
+
 function truncateMessagesForContext(messages, maxChars = 40000) {
   let total = 0;
   const kept = [];
@@ -57,4 +64,11 @@ test('context truncation keeps latest messages within cap', () => {
   assert.ok(trimmed.length < messages.length);
   assert.ok(trimmed.reduce((sum, msg) => sum + msg.content.length, 0) <= 25000);
   assert.equal(trimmed.at(-1).content.startsWith('e'), true);
+});
+
+
+test('title heuristic caps to ten words and falls back', () => {
+  assert.equal(makeConversationTitle(''), 'New Chat');
+  assert.equal(makeConversationTitle('one two three four five six seven'), 'one two three four five six seven');
+  assert.equal(makeConversationTitle('1 2 3 4 5 6 7 8 9 10 11 12'), '1 2 3 4 5 6 7 8 9 10');
 });

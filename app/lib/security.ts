@@ -46,6 +46,9 @@ export function truncateMessagesForContext(messages: Array<{ role: 'user' | 'ass
 }
 
 export function makeConversationTitle(firstMessage: string) {
-  const words = firstMessage.trim().split(/\s+/).filter(Boolean).slice(0, 10);
-  return words.join(' ').slice(0, 120) || 'New Chat';
+  const words = firstMessage.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  if (words.length === 0) return 'New Chat';
+
+  const desiredLength = words.length >= 10 ? 10 : words.length >= 6 ? words.length : Math.min(words.length, 6);
+  return words.slice(0, desiredLength).join(' ').slice(0, 120);
 }
