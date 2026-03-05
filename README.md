@@ -373,3 +373,130 @@ curl -b cookies.txt -H 'x-csrf-token: <token>' -X POST https://chat.example.com/
 ./scripts/backup.sh --stop-container
 ./scripts/restore.sh /path/to/backup-dir
 ```
+
+## Synology 운영 자동화 (Phase 4.1)
+
+이 섹션은 Synology DSM Task Scheduler 기준으로 **백업/정리/헬스체크 자동화**를 구성하는 실무 가이드입니다.
+
+### 공통 경로 예시 + 권한
+
+권장 예시 경로:
+
+- 프로젝트: `/volume1/docker/nas-gpt-chat`
+- 데이터: `/volume1/docker/nas-gpt-chat/data`
+- 백업: `/volume1/docker/nas-gpt-chat/backups`
+
+권한 주의:
+
+- Task Scheduler는 지정한 사용자 계정으로 실행됩니다.
+- 해당 사용자에게 위 폴더에 대한 read/write 권한이 있어야 합니다.
+- Docker 명령을 쓰는 작업(backup --stop/restore/status 등)은 해당 사용자가 docker 실행 권한(예: `docker` 그룹 또는 관리자 권한)을 가져야 합니다.
+
+### 사전 준비 (환경변수)
+
+`.env`에 자동화용 토큰/웹훅을 설정합니다.
+
+```env
+ADMIN_TASK_TOKEN=change-this-long-random-token
+OPS_WEBHOOK_URL=
+```
+
+- `ADMIN_TASK_TOKEN`: `/api/admin/maintenance/*` 및 `/metrics` 자동화 호출용 Bearer 토큰.
+- `OPS_WEBHOOK_URL`: 선택값. 설정 시 실패 이벤트를 외부 웹훅으로 전송.
+
+> 보안 권장: 긴 랜덤 문자열 사용, 정기 교체, Task Scheduler 스크립트에 평문 직접 하드코딩 대신 환경 주입 사용.
+
+### A) Task Scheduler - Backup Job
+
+1. DSM → **Control Panel** → **Task Scheduler**.
+2. **Create** → **Scheduled Task** → **User-defined script**.
+3. 이름 예시: `nas-gpt-chat-backup`.
+4. 실행 사용자: 프로젝트/백업 폴더 쓰기 가능 + docker 실행 가능한 계정.
+5. 스케줄: **Daily 03:10**.
+6. User-defined script 예시:
+
+```bash
+cd /volume1/docker/nas-gpt-chat
+./scripts/backup.sh \
+  --project-dir /volume1/docker/nas-gpt-chat \
+  --compose-path /volume1/docker/nas-gpt-chat/docker-compose.yml \
+  --data-dir /volume1/docker/nas-gpt-chat/data \
+  --out-dir /volume1/docker/nas-gpt-chat/backups \
+  --rotate 14 \
+  --stop
+```
+
+설명:
+- `--rotate 14`: 최신 14개 백업만 유지.
+- `--stop`: 정합성 높은 백업이 필요하면 컨테이너 일시 중지 후 수행.
+
+### B) Task Scheduler - Retention Cleanup Job
+
+1. 동일 방식으로 새 작업 생성.
+2. 이름 예시: `nas-gpt-chat-retention-cleanup`.
+3. 스케줄: **Daily 03:30**.
+4. 실행 스크립트는 두 가지 방식 중 하나:
+
+직접 curl 호출:
+
+```bash
+curl -fsS -X POST \
+  -H "Authorization: Bearer ${ADMIN_TASK_TOKEN}" \
+  http://127.0.0.1:3000/api/admin/maintenance/cleanup
+```
+
+로컬 helper 사용:
+
+```bash
+cd /volume1/docker/nas-gpt-chat
+ADMIN_TASK_TOKEN='your-token' ./scripts/ops/cleanup.sh --base-url http://127.0.0.1:3000
+```
+
+### C) Task Scheduler - Health Check Job (선택)
+
+1. 새 작업 생성, 이름 예시: `nas-gpt-chat-health-check`.
+2. 스케줄: **Every 10 minutes**.
+3. 간단 점검 예시:
+
+```bash
+curl -fsS http://127.0.0.1:3000/health
+```
+
+4. 실패 시 알림 포함 점검 예시:
+
+```bash
+cd /volume1/docker/nas-gpt-chat
+OPS_WEBHOOK_URL='https://example.webhook' ./scripts/ops/check.sh --base-url http://127.0.0.1:3000
+```
+
+### D) Synology Reverse Proxy 권장 설정 (SSE)
+
+- read timeout: 최소 300초 이상 권장.
+- 가능하면 response buffering 비활성화.
+- HTTP/2에서 스트리밍 중간 종료가 있으면 HTTP/1.1 경유 비교 테스트.
+- 점검 순서: timeout → buffering → 상위 방화벽 idle timeout.
+
+### 운영 스크립트 요약
+
+모든 스크립트는 `--help`를 지원합니다.
+
+```bash
+./scripts/backup.sh --help
+./scripts/restore.sh --help
+./scripts/ops/status.sh --help
+./scripts/ops/check.sh --help
+./scripts/ops/cleanup.sh --help
+./scripts/ops/notify.sh --help
+```
+
+복구 예시:
+
+```bash
+cd /volume1/docker/nas-gpt-chat
+./scripts/restore.sh \
+  --project-dir /volume1/docker/nas-gpt-chat \
+  --compose-path /volume1/docker/nas-gpt-chat/docker-compose.yml \
+  --backup-dir /volume1/docker/nas-gpt-chat/backups/backup-20260115-031000 \
+  --force \
+  --pre-snapshot
+```

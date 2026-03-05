@@ -4,6 +4,8 @@ import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/app/lib/db';
 
+import { env } from '@/app/lib/env';
+
 const SESSION_COOKIE = 'nas_gpt_session';
 const CSRF_COOKIE = 'nas_gpt_csrf';
 const SESSION_TTL_DAYS = 14;
@@ -105,6 +107,20 @@ export async function requireAdmin() {
   const user = await requireUser();
   if (!user.isAdmin) redirect('/chat');
   return user;
+}
+
+
+export function extractBearerToken(authHeader: string | null) {
+  if (!authHeader) return null;
+  const [scheme, token] = authHeader.trim().split(/\s+/, 2);
+  if (!scheme || !token || scheme.toLowerCase() !== 'bearer') return null;
+  return token;
+}
+
+export function isValidAdminTaskToken(req: Request) {
+  if (!env.ADMIN_TASK_TOKEN) return false;
+  const token = extractBearerToken(req.headers.get('authorization'));
+  return Boolean(token && token === env.ADMIN_TASK_TOKEN);
 }
 
 export function getRequestIp() {
