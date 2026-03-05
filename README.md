@@ -1,98 +1,231 @@
 # nas-gpt-chat (Synology NAS-focused)
 
-Production-friendly self-hosted ChatGPT-style app for NAS environments.
-
-## Highlights (Phase 2)
-- First-user bootstrap creates initial admin automatically.
-- Public signup disabled by default (`ALLOW_PUBLIC_SIGNUP=false`).
-- Admin user management (`/admin`): list/create/disable users.
-- Login lockout (10 failures/15 min => 15 min lockout by username+IP).
-- Hardened auth cookies + CSRF protection.
-- SSE reliability for reverse proxies (heartbeat + proxy-safe headers).
-- Chat limits: 30 req/min + max 5 concurrent streams per user.
-- Message/context caps (8,000 per message, 40,000 context chars).
-- User settings persisted (model, temperature, system prompt).
-- `/api/health` endpoint for uptime checks.
+Synology NAS에서 바로 운영 가능한 self-hosted ChatGPT 스타일 앱입니다.
+운영자가 실제 배포/점검/복구까지 수행할 수 있도록 문서를 운영 매뉴얼 중심으로 정리했습니다.
 
 ---
 
-## 1) First-time setup and bootstrap
-1. Start app with empty DB.
-2. Visit `/register`.
-3. Create first account -> automatically becomes admin.
-4. After first user exists, registration is blocked unless `ALLOW_PUBLIC_SIGNUP=true`.
+## 운영 가이드 (Operation Manual)
 
-Admin can then create/disable users at `/admin`.
+### 1. 전체 아키텍처 개요
 
-## 2) Environment variables
-Copy and edit:
+트래픽 흐름:
+
+브라우저  
+→ Synology Reverse Proxy  
+→ Docker (nas-gpt-chat)  
+→ OpenAI API
+
+운영 핵심 포인트:
+- 브라우저는 절대 `api.openai.com`을 직접 호출하지 않습니다.
+- `OPENAI_API_KEY`는 서버(컨테이너)에서만 사용합니다.
+- 사용자는 NAS 도메인(예: `chat.awesomepp.synology.me`)만 접근합니다.
+- OpenAI 요청/응답 제어는 앱 서버에서 수행합니다.
+
+---
+
+### 2. Synology 배포 단계 (Step-by-step)
+
+#### ① Docker compose 실행
+
+1) NAS에 프로젝트 폴더 준비
+- 예시: `/volume1/docker/nas-gpt-chat/app`
+- 영속 데이터: `/volume1/docker/nas-gpt-chat/data`
+
+2) 코드와 `.env` 준비 후 실행
+
+```bash
+docker compose up -d
+```
+
+3) 상태 확인
+- 컨테이너 이름: `nas-gpt-chat`
+- 앱 포트: `3000`
+- DB 파일: `data/nas-gpt-chat.db`
+
+#### ② Synology Reverse Proxy 설정
+
+DSM 경로:
+- 제어판(Control Panel) → 로그인 포털(Login Portal) → 고급(Advanced) → Reverse Proxy
+
+필수 매핑:
+- 외부(소스): `https://chat.awesomepp.synology.me`
+- 내부(대상): `http://NAS-IP:3000`
+
+권장:
+- 외부는 HTTPS만 허용
+- HTTP 접근은 HTTPS로 리다이렉트
+
+#### ③ 권장 설정
+
+- HTTPS 필수
+- timeout 300초 이상 (SSE 때문)
+- buffering 비활성 권장
+
+실무 팁:
+- SSE는 장시간 연결을 유지합니다.
+- timeout이 짧으면 답변이 중간에 끊깁니다.
+- 프록시 변환/버퍼링이 켜져 있으면 스트리밍이 지연될 수 있습니다.
+
+---
+
+### 3. 최초 설정 (First Setup)
+
+#### 관리자 계정 생성
+
+- 최초 실행(빈 DB) 후 `/register` 접속
+- 첫 번째로 생성한 계정이 자동 관리자(admin) 권한을 가집니다.
+- 이후 `/admin`에서 일반 사용자 생성/비활성화가 가능합니다.
+
+#### 기본 회원가입 차단
+
+- 기본값: `ALLOW_PUBLIC_SIGNUP=false`
+- 의미: 최초 부트스트랩 이후 공개 회원가입 차단
+- 운영 권장: 인터넷 공개 환경에서는 계속 `false` 유지
+
+#### 환경변수 설정 방법 (`.env`)
+
+1) 템플릿 복사
 
 ```bash
 cp .env.example .env
 ```
 
+2) 필수 값 입력
+
 ```env
-OPENAI_API_KEY=...
-APP_URL=https://chat.example.com
-AUTH_SECRET=change-me-long-random-secret
+OPENAI_API_KEY=sk-...
+APP_URL=https://chat.awesomepp.synology.me
+AUTH_SECRET=충분히_긴_랜덤_문자열
 ALLOW_PUBLIC_SIGNUP=false
 BUILD_VERSION=1.0.0
 DATABASE_URL=file:/data/nas-gpt-chat.db
 ```
 
-## 3) Synology NAS deployment (step-by-step)
+3) 변경 후 재기동
 
-### A. Prepare folders on NAS
-Create project folder, for example:
-- `/volume1/docker/nas-gpt-chat/app`
-- `/volume1/docker/nas-gpt-chat/data`
-
-Place repository files in `app` and keep `data` for SQLite persistence.
-
-### B. Deploy with Container Manager (Compose)
-Use this repo `docker-compose.yml`.
-Key points:
-- app runs on port `3000`
-- `.env` is loaded automatically
-- `./data:/data` volume persists SQLite DB
-
-Run:
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
 
-### C. Confirm persistence
-Check DB file exists after first run:
-- `data/nas-gpt-chat.db`
+---
 
-If container is recreated, chat/auth data should remain.
+### 4. 운영 중 점검 체크리스트
 
-## 4) Synology reverse proxy configuration (SSE-safe)
-DSM -> Control Panel -> Login Portal -> Advanced -> Reverse Proxy:
-- Source: `https://chat.yourdomain.com`
-- Destination: `http://<NAS-IP>:3000`
+정기 점검 체크리스트:
 
-Important SSE notes:
-- WebSockets are **not required**.
-- Increase proxy read timeout to **300s or more**.
-- Keep buffering/transformation disabled where possible.
+- [ ] 로그인 정상 동작
+- [ ] 채팅 저장 정상
+- [ ] SSE 스트리밍 정상
+- [ ] DevTools에서 `api.openai.com` 호출 없음
+- [ ] Docker 상태 정상
 
-## 5) Security notes (public exposure)
-- Keep `OPENAI_API_KEY` server-side only (never in browser code).
-- Keep `ALLOW_PUBLIC_SIGNUP=false` for internet-exposed deployments.
-- Use long random `AUTH_SECRET`.
-- Consider adding reverse-proxy **Basic Auth** as an extra protective layer.
-- Prefer HTTPS termination at Synology reverse proxy.
+빠른 확인 명령:
 
-## 6) Admin user management
-At `/admin` (admin-only):
-- List users
-- Create user (username/password)
-- Disable/enable non-admin users
+```bash
+docker ps --filter "name=nas-gpt-chat"
+```
 
-Disabled users cannot login; sessions are revoked when disabled.
+```bash
+docker logs nas-gpt-chat --tail 100
+```
 
-## 7) Local development
+---
+
+### 5. 백업 및 복구
+
+#### SQLite 백업 방법
+
+1) 쓰기 중지
+
+```bash
+docker compose down
+```
+
+2) `/data` 폴더 백업
+- 예: `/volume1/docker/nas-gpt-chat/data` 전체 복사
+- 핵심 파일: `nas-gpt-chat.db`
+
+#### 복구 방법
+
+1) 백업한 `data` 복사
+2) 컨테이너 재기동
+
+```bash
+docker compose up -d
+```
+
+3) 로그인/채팅 이력 확인
+
+운영 팁:
+- 백업은 주기적으로 자동화 권장(예: Hyper Backup + 스냅샷)
+- 복구 테스트를 분기별 1회 이상 수행 권장
+
+---
+
+### 6. 장애 대응 (Troubleshooting)
+
+■ 채팅 안됨
+- `.env`의 `OPENAI_API_KEY`, `APP_URL` 확인
+- 컨테이너 로그 확인 (`docker logs nas-gpt-chat -f`)
+- OpenAI API 사용량/과금 상태 확인
+
+■ 스트리밍 끊김
+- reverse proxy timeout 300초 이상인지 확인
+- proxy buffering 비활성화 여부 확인
+- 네트워크 품질(업링크/방화벽) 확인
+
+■ 로그인 실패
+- 비밀번호 오류 누적으로 lockout 되었는지 확인
+- 세션/쿠키 문제 확인 (브라우저 쿠키 삭제 후 재시도)
+- 도메인/HTTPS 혼용 접속 여부 확인
+
+■ `api.openai.com` 호출 발생
+- 프론트 설정 오류
+- 브라우저에서 OpenAI 직접 호출 코드가 들어갔는지 확인
+- 모든 요청이 NAS 도메인 기준 same-origin인지 확인
+
+---
+
+### 7. 로그 확인 방법
+
+실시간 로그:
+
+```bash
+docker logs nas-gpt-chat -f
+```
+
+정상 로그 예시(형태 예시):
+- 앱 시작 완료 로그
+- `/api/health` 200 응답 로그
+- 로그인 성공 로그
+- 채팅 요청 수신 및 스트리밍 완료 로그
+
+확인 포인트:
+- 에러 스택 반복 여부
+- 401/403/429 빈도
+- 응답 지연 시간 증가 추세
+
+---
+
+### 8. 보안 권장사항
+
+- Reverse Proxy Basic Auth 권장
+- 외부 공개 시 rate limit 필수
+- 관리자 계정 보호 중요
+
+실무 보안 체크:
+- 관리자 비밀번호 주기적 변경
+- `AUTH_SECRET` 충분히 길게 유지
+- HTTPS 인증서 자동 갱신 상태 점검
+- 불필요한 NAS 포트 외부 노출 금지
+
+---
+
+## 개발/운영 참고
+
+### 로컬 개발
+
 ```bash
 npm install
 npm run prisma:generate
@@ -100,17 +233,11 @@ npm run prisma:push
 npm run dev
 ```
 
-## 8) Quality checks
+### 품질 점검
+
 ```bash
 npm run test
 npm run lint
 npm run typecheck
 npm run build
 ```
-
-## 9) Troubleshooting
-- **Cannot register:** likely expected when bootstrap is done and `ALLOW_PUBLIC_SIGNUP=false`.
-- **SSE stream stops early behind proxy:** increase reverse proxy read timeout (>=300s).
-- **Login blocked:** account lockout may be active after repeated failed attempts.
-- **Database resets after restart:** verify `./data:/data` mapping and `DATABASE_URL=file:/data/nas-gpt-chat.db`.
-- **401 on API calls from UI:** ensure cookies are preserved and app is accessed via same origin.
