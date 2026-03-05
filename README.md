@@ -278,3 +278,98 @@ npm run lint
 npm run typecheck
 npm run build
 ```
+
+## 운영 고도화 (Phase 4)
+
+### 운영 관측성 / 사용량 분석
+
+- 관리자는 `/admin`에서 다음을 확인할 수 있습니다.
+  - 빌드 버전, DB 상태
+  - 최근 에러 이벤트 50개
+  - 일별 요청 수/토큰/추정 비용 테이블
+- 사용량 원천 데이터:
+  - `usage_events`
+  - `daily_usage_rollups`
+- 비용은 서버 가격표 기반의 best-effort 추정치이며, 모델 미지원/토큰 미수신 시 `null` 또는 0 집계가 될 수 있습니다.
+
+### 모니터링 엔드포인트
+
+- `GET /health`
+  - `{ status, version, uptime, db_ok }`
+- `GET /metrics` (관리자만)
+  - `total_requests`
+  - `total_errors`
+  - `active_streams`
+  - `last_cleanup_time`
+
+### Export / Import
+
+#### 대화 내보내기
+
+```bash
+curl -b cookies.txt \
+  https://chat.example.com/api/conversations/123/export
+```
+
+#### 대화 가져오기
+
+```bash
+curl -b cookies.txt -H 'Content-Type: application/json' -H 'x-csrf-token: <token>' \
+  -X POST https://chat.example.com/api/conversations/import \
+  -d '{"title":"Imported","messages":[{"role":"user","content":"hello"},{"role":"assistant","content":"hi"}]}'
+```
+
+주의사항:
+- import된 대화는 요청 사용자 소유로 저장됩니다.
+- 메시지 role/content는 서버에서 sanitize되며, 비정상 payload는 거부됩니다.
+
+### 데이터 보존 정책 / 정리 작업
+
+환경변수:
+
+```env
+RETENTION_DAYS_MESSAGES=0
+RETENTION_DAYS_USAGE=90
+```
+
+- `0`은 무기한 보관 의미입니다.
+- 앱은 하루 1회 best-effort 정리 작업을 수행합니다.
+- 관리자는 수동 실행 가능:
+
+```bash
+curl -b cookies.txt -H 'x-csrf-token: <token>' -X POST https://chat.example.com/api/admin/maintenance/cleanup
+```
+
+### Synology Reverse Proxy (SSE) 운영 노트
+
+- read timeout 최소 300초 이상 권장.
+- buffering/response buffering 가능한 경우 비활성화.
+- HTTP/2 사용 시 연결 재설정/중간 종료 이슈가 있으면 HTTP/1.1 경유로 비교 테스트.
+- 스트리밍 중 끊김 발생 시:
+  1) reverse proxy timeout
+  2) buffering 설정
+  3) 상위 방화벽/보안장비 idle timeout
+  순서로 점검합니다.
+
+### 백업/복구 운영 권장
+
+백업 대상:
+- SQLite DB 파일 (`/data/nas-gpt-chat.db`)
+- `/data` 볼륨 전체
+
+권장 주기:
+- 최소 1일 1회 + 주요 변경 전 수동 백업
+- 월 1회 이상 복구 리허설
+
+복구 절차:
+1) 컨테이너 중지
+2) 백업 `/data` 복원
+3) 컨테이너 재기동
+4) `/health`, 로그인, 대화 목록 점검
+
+도우미 스크립트:
+
+```bash
+./scripts/backup.sh --stop-container
+./scripts/restore.sh /path/to/backup-dir
+```
