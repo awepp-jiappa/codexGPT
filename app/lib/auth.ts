@@ -1,10 +1,11 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/app/lib/db';
 
 const SESSION_COOKIE = 'nas_gpt_session';
+const CSRF_COOKIE = 'nas_gpt_csrf';
 const SESSION_TTL_DAYS = 14;
 
 function signValue(value: string) {
@@ -29,6 +30,32 @@ export async function hashPassword(password: string) {
 
 export async function verifyPassword(password: string, hash: string) {
   return bcrypt.compare(password, hash);
+}
+
+export function issueCsrfToken() {
+  const token = crypto.randomBytes(24).toString('hex');
+  cookies().set({
+    name: CSRF_COOKIE,
+    value: token,
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/'
+  });
+  return token;
+}
+
+export async function verifyCsrfToken(req: Request) {
+  const cookieToken = cookies().get(CSRF_COOKIE)?.value;
+  const headerToken = req.headers.get('x-csrf-token');
+  const contentType = req.headers.get('content-type') || '';
+  if (headerToken && cookieToken && headerToken === cookieToken) return true;
+  if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('multipart/form-data')) {
+    const form = await req.clone().formData().catch(() => null);
+    const bodyToken = form?.get('csrfToken');
+    return Boolean(bodyToken && cookieToken && bodyToken === cookieToken);
+  }
+  return false;
 }
 
 export async function createSession(userId: number) {
@@ -64,7 +91,7 @@ export async function getUserFromSession() {
     include: { user: true }
   });
 
-  if (!session) return null;
+  if (!session || session.user.isDisabled) return null;
   return session.user;
 }
 
@@ -72,4 +99,15 @@ export async function requireUser() {
   const user = await getUserFromSession();
   if (!user) redirect('/login');
   return user;
+}
+
+export async function requireAdmin() {
+  const user = await requireUser();
+  if (!user.isAdmin) redirect('/chat');
+  return user;
+}
+
+export function getRequestIp() {
+  const h = headers();
+  return h.get('x-forwarded-for')?.split(',')[0]?.trim() || h.get('x-real-ip') || 'unknown';
 }

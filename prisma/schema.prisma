@@ -8,12 +8,15 @@ datasource db {
 }
 
 model User {
-  id           Int            @id @default(autoincrement())
-  username     String         @unique
-  passwordHash String         @map("password_hash")
-  createdAt    DateTime       @default(now()) @map("created_at")
+  id            Int            @id @default(autoincrement())
+  username      String         @unique
+  passwordHash  String         @map("password_hash")
+  isAdmin       Boolean        @default(false) @map("is_admin")
+  isDisabled    Boolean        @default(false) @map("is_disabled")
+  createdAt     DateTime       @default(now()) @map("created_at")
   conversations Conversation[]
-  sessions     Session[]
+  sessions      Session[]
+  settings      UserSettings?
 
   @@map("users")
 }
@@ -45,7 +48,7 @@ model Conversation {
 model Message {
   id             Int          @id @default(autoincrement())
   conversationId Int          @map("conversation_id")
-  role           MessageRole
+  role           String
   content        String
   createdAt      DateTime     @default(now()) @map("created_at")
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -54,8 +57,25 @@ model Message {
   @@map("messages")
 }
 
-enum MessageRole {
-  user
-  assistant
-  system
+model LoginAttempt {
+  id          Int      @id @default(autoincrement())
+  username    String
+  ipAddress   String   @map("ip_address")
+  successful  Boolean  @default(false)
+  attemptedAt DateTime @default(now()) @map("attempted_at")
+
+  @@index([username, ipAddress, attemptedAt])
+  @@map("login_attempts")
+}
+
+model UserSettings {
+  id           Int      @id @default(autoincrement())
+  userId       Int      @unique @map("user_id")
+  model        String   @default("gpt-4o-mini")
+  temperature  Float    @default(0.7)
+  systemPrompt String   @default("") @map("system_prompt")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_settings")
 }
