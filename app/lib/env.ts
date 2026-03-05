@@ -19,5 +19,7 @@ export const env = {
   ALLOW_PUBLIC_SIGNUP: process.env.ALLOW_PUBLIC_SIGNUP === 'true',
   BUILD_VERSION: process.env.BUILD_VERSION ?? process.env.npm_package_version ?? 'dev',
   RETENTION_DAYS_MESSAGES: toNumber(process.env.RETENTION_DAYS_MESSAGES, 0),
-  RETENTION_DAYS_USAGE: toNumber(process.env.RETENTION_DAYS_USAGE, 90)
+  RETENTION_DAYS_USAGE: toNumber(process.env.RETENTION_DAYS_USAGE, 90),
+  ADMIN_TASK_TOKEN: process.env.ADMIN_TASK_TOKEN ?? '',
+  OPS_WEBHOOK_URL: process.env.OPS_WEBHOOK_URL ?? ''
 };

@@ -15,7 +15,7 @@
 - NAS deployment hardening and reverse proxy operational guidance.
 - Lightweight UX parity improvements for ongoing chat usage.
 
-## Phase 4 (Completed in this update)
+## Phase 4 (Completed in prior update)
 
 ### 1) Usage Tracking / Cost Estimation
 - Added `usage_events` + `daily_usage_rollups` tables.
@@ -59,3 +59,17 @@
   - retention cutoff logic
   - export/import sanitization roundtrip behavior
   - usage cost estimation and usage-event payload behavior
+
+## Phase 4.1 (Completed in this update)
+
+- Added Synology Task Scheduler runbooks in README for backup, retention cleanup, health-check, and reverse proxy SSE guidance.
+- Added non-interactive admin automation token (`ADMIN_TASK_TOKEN`) support for:
+  - `POST /api/admin/maintenance/cleanup`
+  - `GET /metrics`
+- Enhanced backup/restore scripts with explicit CLI options, rotation, safer restore checks, and optional pre-restore snapshot.
+- Added one-command ops helpers:
+  - `scripts/ops/status.sh`
+  - `scripts/ops/check.sh`
+  - `scripts/ops/cleanup.sh`
+  - `scripts/ops/notify.sh`
+- Added optional webhook notification hook (`OPS_WEBHOOK_URL`) for automation failures.
