@@ -1,17 +1,25 @@
 import { randomUUID } from 'crypto';
 import { NextResponse } from 'next/server';
-import { prisma } from '@/app/lib/db';
+import { ensureStartupEvent, prisma } from '@/app/lib/db';
 import { getUserFromSession, verifyCsrfToken } from '@/app/lib/auth';
 import { chatSchema } from '@/app/lib/validation';
 import { getOpenAIClient } from '@/app/lib/openai';
 import { checkRateLimit, endStream, tryStartStream } from '@/app/lib/rate-limit';
 import { logError, logInfo } from '@/app/lib/log';
 import { makeConversationTitle, truncateMessagesForContext } from '@/app/lib/security';
+import { createSystemEvent } from '@/app/lib/system-events';
+import { incrementTotalErrors, incrementTotalRequests } from '@/app/lib/metrics';
+import { recordUsageEvent } from '@/app/lib/usage';
+import { maybeRunDailyCleanup } from '@/app/lib/maintenance';
 
 const HEARTBEAT_MS = 15_000;
 const OPENAI_TIMEOUT_MS = 120_000;
 
 export async function POST(req: Request) {
+  await ensureStartupEvent();
+  await maybeRunDailyCleanup();
+  incrementTotalRequests();
+
   const requestId = randomUUID();
   const startMs = Date.now();
 
@@ -73,6 +81,9 @@ export async function POST(req: Request) {
   const encoder = new TextEncoder();
   let assistantText = '';
   let heartbeatTimer: NodeJS.Timeout | null = null;
+  let promptTokens: number | null = null;
+  let completionTokens: number | null = null;
+  let totalTokens: number | null = null;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -88,12 +99,19 @@ export async function POST(req: Request) {
             model: settings.model,
             temperature: settings.temperature,
             stream: true,
+            stream_options: { include_usage: true },
             messages: preparedMessages
           },
           { timeout: OPENAI_TIMEOUT_MS }
         );
 
         for await (const chunk of completion) {
+          if (chunk.usage) {
+            promptTokens = chunk.usage.prompt_tokens ?? null;
+            completionTokens = chunk.usage.completion_tokens ?? null;
+            totalTokens = chunk.usage.total_tokens ?? null;
+          }
+
           const token = chunk.choices[0]?.delta?.content ?? '';
           if (!token) continue;
           assistantText += token;
@@ -106,8 +124,18 @@ export async function POST(req: Request) {
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unexpected error';
         controller.enqueue(encoder.encode(`event: error\ndata: ${JSON.stringify({ message })}\n\n`));
+        incrementTotalErrors();
+        await createSystemEvent('error', 'openai.request_error', { requestId, userId: user.id, message });
         logError('chat.error', { requestId, userId: user.id, durationMs: Date.now() - startMs, message });
       } finally {
+        await recordUsageEvent({
+          userId: user.id,
+          conversationId,
+          model: settings.model,
+          requestId,
+          usage: { promptTokens, completionTokens, totalTokens }
+        }).catch(() => {});
+
         if (heartbeatTimer) clearInterval(heartbeatTimer);
         endStream(user.id);
         controller.close();
@@ -117,6 +145,13 @@ export async function POST(req: Request) {
       if (assistantText) {
         await prisma.message.create({ data: { conversationId, role: 'assistant', content: `${assistantText}\n\n(stopped)` } });
       }
+      await recordUsageEvent({
+        userId: user.id,
+        conversationId,
+        model: settings.model,
+        requestId,
+        usage: { promptTokens, completionTokens, totalTokens }
+      }).catch(() => {});
       if (heartbeatTimer) clearInterval(heartbeatTimer);
       endStream(user.id);
       logInfo('chat.cancelled', { requestId, userId: user.id, durationMs: Date.now() - startMs });

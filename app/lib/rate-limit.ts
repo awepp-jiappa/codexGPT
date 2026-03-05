@@ -36,6 +36,10 @@ export function endStream(userId: number) {
   userConcurrentStreams.set(userId, current - 1);
 }
 
+export function getActiveStreamCount() {
+  return [...userConcurrentStreams.values()].reduce((sum, value) => sum + value, 0);
+}
+
 export function __resetRateLimitsForTests() {
   userRequestLog.clear();
   userConcurrentStreams.clear();

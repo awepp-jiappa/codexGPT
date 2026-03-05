@@ -6,69 +6,56 @@
 - Conversations create/rename/delete and chat history.
 - Docker + base Synology deployment workflow.
 
-## Phase 2 (Completed in this update)
+## Phase 2 (Completed)
+- Authentication/bootstrap hardening, CSRF/session protections, and admin user controls.
+- Abuse controls (rate limits, stream concurrency, context/message caps).
+- Streaming stability/UX improvements, settings persistence, and base observability.
 
-### 1) Authentication & Bootstrap
-- First-user bootstrap flow: first account is auto-admin.
-- Public signup disabled by default (`ALLOW_PUBLIC_SIGNUP=false`).
-- Admin-only user management UI/API:
-  - list users
-  - create user
-  - disable/enable user
-- Disabled users are blocked from login and existing sessions are revoked when disabled.
+## Phase 3 (Completed)
+- NAS deployment hardening and reverse proxy operational guidance.
+- Lightweight UX parity improvements for ongoing chat usage.
 
-### 2) Session & Security Hardening
-- Session cookies hardened (`httpOnly`, `sameSite=lax`, secure in production).
-- CSRF protections for auth and sensitive mutation routes.
-- Password policy for new accounts:
-  - minimum 10 chars
-  - weak-password denylist
-- SQLite-backed login attempt tracking + lockout:
-  - 10 failed attempts in 15 min
-  - lockout for 15 min by username+IP.
+## Phase 4 (Completed in this update)
 
-### 3) Abuse Controls
-- `/api/chat` limits:
-  - 30 req/min per user
-  - max 5 concurrent streaming requests per user
-- Message limit 8,000 chars.
-- Conversation context truncated to 40,000 chars (oldest dropped).
-- OpenAI timeout 120s.
+### 1) Usage Tracking / Cost Estimation
+- Added `usage_events` + `daily_usage_rollups` tables.
+- `/api/chat` now records one usage event per request (tokens nullable when unavailable).
+- Added server-side model price map and best-effort USD estimation.
+- Added admin usage rollup endpoint with user/date filtering.
 
-### 4) Streaming Reliability
-- SSE proxy-safe headers.
-- Standardized SSE protocol (`chunk`, `done`, `error`).
-- 15s heartbeat events.
-- Client AbortController support with “Stop generating”.
-- Regenerate on latest user prompt.
-- Partial aborted output stored with `(stopped)` marker.
+### 2) Admin Operations Dashboard
+- Expanded `/admin` with operations data:
+  - build version
+  - DB health
+  - in-memory metrics snapshot
+  - usage rollups table
+  - last 50 error system events
+- Added `system_events` table and structured DB logging for startup/config/openai errors.
 
-### 5) UX Improvements
-- Automatic conversation title heuristic (first words).
-- Sidebar search (title + recent text).
-- Basic safe markdown-style rendering for assistant messages.
-- Code block copy button.
-- Settings panel for model / temperature / system prompt.
+### 3) Export / Import
+- Added conversation export endpoint (`GET /api/conversations/:id/export`) for owner/admin.
+- Added import endpoint (`POST /api/conversations/import`) with ownership enforcement and payload sanitization.
 
-### 6) Settings Persistence
-- `user_settings` table persisted in SQLite.
-- Per-user model, temperature, and system prompt.
+### 4) Data Retention / Maintenance
+- Added env-based retention controls:
+  - `RETENTION_DAYS_MESSAGES` (default 0)
+  - `RETENTION_DAYS_USAGE` (default 90)
+- Added cleanup job logic + daily best-effort run + admin manual trigger endpoint:
+  - `POST /api/admin/maintenance/cleanup`
+- Cleanup runs are logged to `system_events` and reflected in metrics.
 
-### 7) Observability
-- Structured JSON logs around chat requests.
-- Request id per `/api/chat` call.
-- Timing + response length logging.
-- `/api/health` endpoint with status/version/db check.
+### 5) Monitoring Endpoints
+- Added `GET /health` (version, uptime, db_ok).
+- Added admin-only `GET /metrics` with minimal counters.
 
-### 8) Deployment Hardening (Synology)
-- Docker Compose defaults to persistent `/data` volume for SQLite.
-- `.env`-driven runtime configuration.
-- Synology reverse proxy SSE timeout guidance documented.
-- Optional reverse-proxy Basic Auth recommendation documented.
+### 6) Backup / Restore Guidance
+- Added operational guidance in README for backup/restore planning.
+- Added helper scripts:
+  - `scripts/backup.sh`
+  - `scripts/restore.sh`
 
-### 9) Quality Gates
+### 7) Quality Gates
 - Added minimal tests for:
-  - bootstrap signup logic
-  - rate limiting threshold
-  - context truncation behavior
-- Required checks: lint, typecheck, build.
+  - retention cutoff logic
+  - export/import sanitization roundtrip behavior
+  - usage cost estimation and usage-event payload behavior
