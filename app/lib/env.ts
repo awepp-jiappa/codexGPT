@@ -10,5 +10,7 @@ export const env = {
   OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? '',
   AUTH_SECRET: process.env.AUTH_SECRET ?? '',
   APP_URL: process.env.APP_URL ?? 'http://localhost:3000',
-  DATABASE_URL: process.env.DATABASE_URL ?? 'file:./prisma/dev.db'
+  DATABASE_URL: process.env.DATABASE_URL ?? 'file:./prisma/dev.db',
+  ALLOW_PUBLIC_SIGNUP: process.env.ALLOW_PUBLIC_SIGNUP === 'true',
+  BUILD_VERSION: process.env.BUILD_VERSION ?? process.env.npm_package_version ?? 'dev'
 };

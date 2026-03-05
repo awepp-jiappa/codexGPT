@@ -1,9 +1,19 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/app/lib/db';
 import { authSchema } from '@/app/lib/validation';
-import { createSession, hashPassword } from '@/app/lib/auth';
+import { createSession, verifyCsrfToken } from '@/app/lib/auth';
+import { env } from '@/app/lib/env';
+import { hashPassword } from '@/app/lib/auth';
 
 export async function POST(req: Request) {
+  if (!(await verifyCsrfToken(req))) return NextResponse.redirect(new URL('/register?error=csrf', req.url));
+
+  const userCount = await prisma.user.count();
+  const bootstrapMode = userCount === 0;
+  if (!bootstrapMode && !env.ALLOW_PUBLIC_SIGNUP) {
+    return NextResponse.redirect(new URL('/register?error=disabled', req.url));
+  }
+
   const formData = await req.formData();
   const parsed = authSchema.safeParse({
     username: formData.get('username'),
@@ -22,10 +32,12 @@ export async function POST(req: Request) {
   const user = await prisma.user.create({
     data: {
       username: parsed.data.username,
-      passwordHash: await hashPassword(parsed.data.password)
+      passwordHash: await hashPassword(parsed.data.password),
+      isAdmin: bootstrapMode
     }
   });
 
+  await prisma.userSettings.create({ data: { userId: user.id } });
   await createSession(user.id);
   return NextResponse.redirect(new URL('/chat', req.url));
 }
