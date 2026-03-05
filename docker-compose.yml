@@ -1,0 +1,11 @@
+services:
+  nas-gpt-chat:
+    build: .
+    container_name: nas-gpt-chat
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/prisma
+    restart: unless-stopped
