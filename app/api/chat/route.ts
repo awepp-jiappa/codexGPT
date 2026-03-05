@@ -30,6 +30,7 @@ export async function POST(req: Request) {
   }
 
   let conversationId = parsed.data.conversationId;
+  let shouldAutotitle = false;
 
   if (!conversationId) {
     const conv = await prisma.conversation.create({
@@ -42,6 +43,9 @@ export async function POST(req: Request) {
       endStream(user.id);
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
     }
+
+    const messageCount = await prisma.message.count({ where: { conversationId } });
+    shouldAutotitle = messageCount === 0;
   }
 
   if (parsed.data.regenerate) {
@@ -51,6 +55,9 @@ export async function POST(req: Request) {
 
   if (!parsed.data.regenerate) {
     await prisma.message.create({ data: { conversationId, role: 'user', content: parsed.data.message } });
+    if (shouldAutotitle) {
+      await prisma.conversation.update({ where: { id: conversationId }, data: { title: makeConversationTitle(parsed.data.message) } });
+    }
   }
 
   const [priorMessages, settings] = await Promise.all([
@@ -60,7 +67,7 @@ export async function POST(req: Request) {
 
   const preparedMessages = truncateMessagesForContext([
     ...(settings.systemPrompt ? [{ role: 'system' as const, content: settings.systemPrompt }] : []),
-    ...priorMessages.map((m) => ({ role: m.role as 'user' | 'assistant' | 'system', content: m.content }))
+    ...priorMessages.map((m: (typeof priorMessages)[number]) => ({ role: m.role as 'user' | 'assistant' | 'system', content: m.content }))
   ]);
 
   const encoder = new TextEncoder();

@@ -222,6 +222,43 @@ docker logs nas-gpt-chat -f
 
 ---
 
+
+---
+
+## UX 기능 (Near-ChatGPT Lightweight UX)
+
+현재 UI/UX는 NAS 환경에서 가볍게 동작하도록 다음 기능을 포함합니다.
+
+- Stop generating 버튼 + `AbortController` 기반 스트리밍 중단
+- 중단 시 partial assistant 응답 보존
+- 마지막 assistant 메시지에서 Regenerate response 제공
+- 첫 user 메시지 기반 대화 제목 자동 생성(약 6~10 단어)
+- 사이드바 검색: 제목 + 전체 메시지 본문 클라이언트 필터
+- 안전한 Markdown 렌더링
+  - 코드 블록
+  - 인라인 코드
+  - 리스트
+  - 링크(`http/https`만 허용)
+  - HTML 미사용(React 텍스트 노드 기반)
+- 코드 블록 Copy 버튼 + Copied 상태 표시
+- 스트리밍 중 타이핑 인디케이터
+- Settings 패널
+  - 모델 선택
+  - temperature 슬라이더
+  - system prompt
+  - 사용자별 DB 저장(`/api/settings`)
+- UX 다듬기
+  - 자동 스크롤
+  - settings 로딩 상태
+  - 스트리밍 중 전송 비활성화
+  - 키보드 UX(Enter 전송, Shift+Enter 줄바꿈, Ctrl/Cmd+K 검색 포커스, ESC 중단)
+
+성능 원칙:
+- OpenAI API 호출은 서버에서만 수행
+- 브라우저는 same-origin API(`/api/chat`)만 호출
+- 별도 무거운 Markdown 라이브러리 없이 경량 파서 사용
+
+
 ## 개발/운영 참고
 
 ### 로컬 개발
