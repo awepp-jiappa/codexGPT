@@ -7,7 +7,6 @@ import { prisma } from '@/app/lib/db';
 import { env } from '@/app/lib/env';
 
 const SESSION_COOKIE = 'nas_gpt_session';
-const CSRF_COOKIE = 'nas_gpt_csrf';
 const SESSION_TTL_DAYS = 14;
 
 function signValue(value: string) {
@@ -35,27 +34,25 @@ export async function verifyPassword(password: string, hash: string) {
 }
 
 export function issueCsrfToken() {
-  const token = crypto.randomBytes(24).toString('hex');
-  cookies().set({
-    name: CSRF_COOKIE,
-    value: token,
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    path: '/'
-  });
-  return token;
+  const nonce = crypto.randomBytes(24).toString('hex');
+  return `${nonce}.${signValue(nonce)}`;
+}
+
+function verifyIssuedCsrfToken(raw: string | null) {
+  if (!raw) return false;
+  const [nonce, signature] = raw.split('.');
+  if (!nonce || !signature) return false;
+  return signValue(nonce) === signature;
 }
 
 export async function verifyCsrfToken(req: Request) {
-  const cookieToken = cookies().get(CSRF_COOKIE)?.value;
   const headerToken = req.headers.get('x-csrf-token');
   const contentType = req.headers.get('content-type') || '';
-  if (headerToken && cookieToken && headerToken === cookieToken) return true;
+  if (verifyIssuedCsrfToken(headerToken)) return true;
   if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('multipart/form-data')) {
     const form = await req.clone().formData().catch(() => null);
     const bodyToken = form?.get('csrfToken');
-    return Boolean(bodyToken && cookieToken && bodyToken === cookieToken);
+    return typeof bodyToken === 'string' && verifyIssuedCsrfToken(bodyToken);
   }
   return false;
 }
