@@ -1,5 +1,6 @@
 import { prisma } from '@/app/lib/db';
-import { issueCsrfToken, requireAdmin } from '@/app/lib/auth';
+import { requireAdmin } from '@/app/lib/auth';
+import { issueCsrfToken } from '@/app/lib/csrf';
 import { env } from '@/app/lib/env';
 import { AdminUsers } from '@/app/components/admin-users';
 

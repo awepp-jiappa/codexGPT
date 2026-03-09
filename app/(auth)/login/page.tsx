@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { issueCsrfToken } from '@/app/lib/auth';
+import { issueCsrfToken } from '@/app/lib/csrf';
 
 export default function LoginPage({ searchParams }: { searchParams?: { error?: string } }) {
   const csrfToken = issueCsrfToken();

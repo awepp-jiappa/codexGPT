@@ -1,5 +1,6 @@
 import { prisma } from '@/app/lib/db';
-import { issueCsrfToken, requireUser } from '@/app/lib/auth';
+import { requireUser } from '@/app/lib/auth';
+import { issueCsrfToken } from '@/app/lib/csrf';
 import { ChatShell } from '@/app/components/chat-shell';
 
 export default async function ChatPage() {

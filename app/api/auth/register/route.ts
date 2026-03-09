@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/app/lib/db';
 import { authSchema } from '@/app/lib/validation';
-import { createSession, verifyCsrfToken } from '@/app/lib/auth';
+import { createSession } from '@/app/lib/auth';
+import { verifyCsrfToken } from '@/app/lib/csrf';
 import { env } from '@/app/lib/env';
 import { hashPassword } from '@/app/lib/auth';
 

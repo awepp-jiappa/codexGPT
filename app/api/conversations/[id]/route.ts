@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/app/lib/db';
-import { getUserFromSession, verifyCsrfToken } from '@/app/lib/auth';
+import { getUserFromSession } from '@/app/lib/auth';
+import { verifyCsrfToken } from '@/app/lib/csrf';
 
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   if (!(await verifyCsrfToken(req))) return NextResponse.json({ error: 'CSRF validation failed' }, { status: 403 });

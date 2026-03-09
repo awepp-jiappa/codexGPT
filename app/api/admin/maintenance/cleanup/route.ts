@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { isValidAdminTaskToken, requireAdmin, verifyCsrfToken } from '@/app/lib/auth';
+import { isValidAdminTaskToken, requireAdmin } from '@/app/lib/auth';
+import { verifyCsrfToken } from '@/app/lib/csrf';
 import { runRetentionCleanup } from '@/app/lib/maintenance';
 
 export async function POST(req: Request) {

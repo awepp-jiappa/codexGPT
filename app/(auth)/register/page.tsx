@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { issueCsrfToken } from '@/app/lib/auth';
+import { issueCsrfToken } from '@/app/lib/csrf';
 import { getSignupState } from '@/app/lib/signup';
 
 export default async function RegisterPage({ searchParams }: { searchParams?: { error?: string } }) {

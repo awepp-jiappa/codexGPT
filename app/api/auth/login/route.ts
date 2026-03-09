@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/app/lib/db';
-import { createSession, getRequestIp, verifyCsrfToken } from '@/app/lib/auth';
+import { createSession, getRequestIp } from '@/app/lib/auth';
+import { verifyCsrfToken } from '@/app/lib/csrf';
 import { loginSchema } from '@/app/lib/validation';
 import { getLockoutRemainingMs, recordLoginAttempt } from '@/app/lib/security';
 import { verifyPassword } from '@/app/lib/auth';
