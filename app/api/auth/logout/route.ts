@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { destroySession, verifyCsrfToken } from '@/app/lib/auth';
+import { destroySession } from '@/app/lib/auth';
+import { verifyCsrfToken } from '@/app/lib/csrf';
 
 export async function POST(req: Request) {
   if (!(await verifyCsrfToken(req))) {

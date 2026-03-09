@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/app/lib/db';
-import { hashPassword, requireAdmin, verifyCsrfToken } from '@/app/lib/auth';
+import { hashPassword, requireAdmin } from '@/app/lib/auth';
+import { verifyCsrfToken } from '@/app/lib/csrf';
 import { userCreateSchema } from '@/app/lib/validation';
 
 export async function GET() {

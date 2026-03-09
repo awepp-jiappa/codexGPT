@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/app/lib/db';
-import { getUserFromSession, verifyCsrfToken } from '@/app/lib/auth';
+import { getUserFromSession } from '@/app/lib/auth';
+import { verifyCsrfToken } from '@/app/lib/csrf';
 import { settingsSchema } from '@/app/lib/validation';
 
 export async function GET() {

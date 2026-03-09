@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getUserFromSession, verifyCsrfToken } from '@/app/lib/auth';
+import { getUserFromSession } from '@/app/lib/auth';
+import { verifyCsrfToken } from '@/app/lib/csrf';
 import { prisma } from '@/app/lib/db';
 import { sanitizeImportedConversation } from '@/app/lib/conversation-transfer';
 

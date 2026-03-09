@@ -33,30 +33,6 @@ export async function verifyPassword(password: string, hash: string) {
   return bcrypt.compare(password, hash);
 }
 
-export function issueCsrfToken() {
-  const nonce = crypto.randomBytes(24).toString('hex');
-  return `${nonce}.${signValue(nonce)}`;
-}
-
-function verifyIssuedCsrfToken(raw: string | null) {
-  if (!raw) return false;
-  const [nonce, signature] = raw.split('.');
-  if (!nonce || !signature) return false;
-  return signValue(nonce) === signature;
-}
-
-export async function verifyCsrfToken(req: Request) {
-  const headerToken = req.headers.get('x-csrf-token');
-  const contentType = req.headers.get('content-type') || '';
-  if (verifyIssuedCsrfToken(headerToken)) return true;
-  if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('multipart/form-data')) {
-    const form = await req.clone().formData().catch(() => null);
-    const bodyToken = form?.get('csrfToken');
-    return typeof bodyToken === 'string' && verifyIssuedCsrfToken(bodyToken);
-  }
-  return false;
-}
-
 export async function createSession(userId: number) {
   const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
   const session = await prisma.session.create({ data: { userId, expiresAt } });

@@ -1,7 +1,8 @@
 import { randomUUID } from 'crypto';
 import { NextResponse } from 'next/server';
 import { ensureStartupEvent, prisma } from '@/app/lib/db';
-import { getUserFromSession, verifyCsrfToken } from '@/app/lib/auth';
+import { getUserFromSession } from '@/app/lib/auth';
+import { verifyCsrfToken } from '@/app/lib/csrf';
 import { chatSchema } from '@/app/lib/validation';
 import { getOpenAIClient } from '@/app/lib/openai';
 import { checkRateLimit, endStream, tryStartStream } from '@/app/lib/rate-limit';

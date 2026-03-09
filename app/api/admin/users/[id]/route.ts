@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/app/lib/db';
-import { requireAdmin, verifyCsrfToken } from '@/app/lib/auth';
+import { requireAdmin } from '@/app/lib/auth';
+import { verifyCsrfToken } from '@/app/lib/csrf';
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const admin = await requireAdmin();
